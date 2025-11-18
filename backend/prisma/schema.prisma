@@ -1,0 +1,75 @@
+// This is your Prisma schema file
+// It defines your database structure
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// User model - stores user account information
+model User {
+  id            String        @id @default(uuid())
+  email         String        @unique
+  password      String
+  firstName     String
+  lastName      String
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  
+  // Relationships
+  subscription  Subscription?
+  content       Content[]
+  
+  @@map("users")
+}
+
+// Subscription model - tracks trial and paid subscriptions
+model Subscription {
+  id                  String    @id @default(uuid())
+  userId              String    @unique
+  user                User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // Trial information
+  trialStartDate      DateTime  @default(now())
+  trialEndDate        DateTime
+  isTrialActive       Boolean   @default(true)
+  
+  // Stripe information
+  stripeCustomerId    String?   @unique
+  stripeSubscriptionId String?  @unique
+  stripePriceId       String?
+  stripeCurrentPeriodEnd DateTime?
+  
+  // Subscription status
+  status              String    @default("trial") // trial, active, canceled, expired
+  
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+  
+  @@map("subscriptions")
+}
+
+// Content model - stores generated content
+model Content {
+  id          String    @id @default(uuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // Content details
+  contentType String    // "blog", "x_threads", "linkedin"
+  topic       String    @db.Text
+  keywords    String?   @db.Text
+  generatedContent String @db.Text
+  
+  // Metadata
+  wordCount   Int?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  
+  @@map("content")
+  @@index([userId, createdAt])
+}
