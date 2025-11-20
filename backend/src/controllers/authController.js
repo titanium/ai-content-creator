@@ -9,10 +9,6 @@ const prisma = new PrismaClient({
   log: ['error', 'warn'],
 });
 
-// Debug lines
-console.log('Prisma Client:', prisma);
-console.log('Prisma User Model:', prisma.user);
-
 // Generate JWT token
 const generateToken = (userId) => {
   return jwt.sign(
