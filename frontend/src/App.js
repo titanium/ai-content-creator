@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { AlertCircle, Copy, CheckCircle, Loader2 } from 'lucide-react';
 
-const API_URL = 'http://localhost:5001/api';
+const API_URL = 'https://ai-content-creator-backend-production.up.railway.app/api';
 
 export default function ContentCreatorApp() {
   const [currentView, setCurrentView] = useState('login');
