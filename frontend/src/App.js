@@ -51,6 +51,13 @@ export default function ContentCreatorApp() {
     }
   }, []);
 
+  // Fetch content history when filter changes
+  useEffect(() => {
+    if (currentView === 'history' && token) {
+      fetchContentHistory();
+    }
+  }, [historyFilter, currentView]);
+
   const fetchSubscriptionStatus = async (authToken) => {
     try {
       const response = await fetch(`${API_URL}/subscription/status`, {
@@ -503,10 +510,7 @@ export default function ContentCreatorApp() {
             {['all', 'blog', 'x_threads', 'linkedin'].map(filter => (
               <button
                 key={filter}
-                onClick={() => {
-                  setHistoryFilter(filter);
-                  setTimeout(() => fetchContentHistory(), 0);
-                }}
+                onClick={() => setHistoryFilter(filter)}
                 className={`px-4 py-2 rounded-lg font-medium transition ${
                   historyFilter === filter
                     ? 'bg-indigo-600 text-white'
