@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { AlertCircle, Copy, CheckCircle, Loader2, Sparkles, CreditCard } from 'lucide-react';
+import { AlertCircle, Copy, CheckCircle, Loader2, Sparkles, CreditCard, History, Trash2, Eye, Calendar, FileText } from 'lucide-react';
 
 const API_URL = 'https://ai-content-creator-backend-production.up.railway.app/api';
 
@@ -22,6 +22,12 @@ export default function ContentCreatorApp() {
   const [generatedContent, setGeneratedContent] = useState('');
   const [error, setError] = useState('');
 
+  // Content History State
+  const [contentHistory, setContentHistory] = useState([]);
+  const [selectedContent, setSelectedContent] = useState(null);
+  const [historyFilter, setHistoryFilter] = useState('all');
+  const [historyStats, setHistoryStats] = useState(null);
+
   useEffect(() => {
     const savedToken = localStorage.getItem('token');
     const savedUser = localStorage.getItem('user');
@@ -36,11 +42,9 @@ export default function ContentCreatorApp() {
     const urlParams = new URLSearchParams(window.location.search);
     if (urlParams.get('success') === 'true') {
       setError('');
-      // Give Stripe webhook time to process
       setTimeout(() => {
         if (savedToken) {
           fetchSubscriptionStatus(savedToken);
-          // Clear URL params
           window.history.replaceState({}, document.title, window.location.pathname);
         }
       }, 2000);
@@ -60,6 +64,101 @@ export default function ContentCreatorApp() {
       }
     } catch (err) {
       console.error('Failed to fetch subscription status:', err);
+    }
+  };
+
+  const fetchContentHistory = async () => {
+    setIsLoading(true);
+    try {
+      const url = historyFilter === 'all' 
+        ? `${API_URL}/content/history`
+        : `${API_URL}/content/history?contentType=${historyFilter}`;
+
+      const response = await fetch(url, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      const data = await response.json();
+      if (response.ok) {
+        setContentHistory(data.content || []);
+      } else {
+        setError(data.error || 'Failed to fetch content history');
+      }
+    } catch (err) {
+      setError('Failed to fetch content history');
+      console.error(err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const fetchContentStats = async () => {
+    try {
+      const response = await fetch(`${API_URL}/content/stats`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      const data = await response.json();
+      if (response.ok) {
+        setHistoryStats(data);
+      }
+    } catch (err) {
+      console.error('Failed to fetch stats:', err);
+    }
+  };
+
+  const viewContentDetail = async (contentId) => {
+    setIsLoading(true);
+    try {
+      const response = await fetch(`${API_URL}/content/${contentId}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      const data = await response.json();
+      if (response.ok) {
+        setSelectedContent(data.content);
+        setCurrentView('content-detail');
+      } else {
+        setError(data.error || 'Failed to load content');
+      }
+    } catch (err) {
+      setError('Failed to load content');
+      console.error(err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const deleteContent = async (contentId) => {
+    if (!window.confirm('Are you sure you want to delete this content?')) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`${API_URL}/content/${contentId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (response.ok) {
+        // Refresh the list
+        fetchContentHistory();
+        setError('');
+      } else {
+        const data = await response.json();
+        setError(data.error || 'Failed to delete content');
+      }
+    } catch (err) {
+      setError('Failed to delete content');
+      console.error(err);
     }
   };
 
@@ -84,7 +183,6 @@ export default function ContentCreatorApp() {
         return;
       }
 
-      // Redirect to Stripe Checkout
       window.location.href = data.url;
 
     } catch (err) {
@@ -238,8 +336,8 @@ export default function ContentCreatorApp() {
     }
   };
 
-  const handleCopy = () => {
-    navigator.clipboard.writeText(generatedContent);
+  const handleCopy = (text) => {
+    navigator.clipboard.writeText(text || generatedContent);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
@@ -277,6 +375,300 @@ export default function ContentCreatorApp() {
     }
     return user?.subscription?.status === 'active' || isTrialActive();
   };
+
+  const formatDate = (dateString) => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', { 
+      month: 'short', 
+      day: 'numeric', 
+      year: 'numeric' 
+    });
+  };
+
+  const getContentTypeDisplay = (type) => {
+    const typeMap = {
+      'blog': 'Blog Post',
+      'x_threads': 'X/Threads',
+      'linkedin': 'LinkedIn'
+    };
+    return typeMap[type] || type;
+  };
+
+  // Navigation Component
+  const Navigation = () => (
+    <nav className="bg-white shadow-sm border-b">
+      <div className="max-w-6xl mx-auto px-4 py-4 flex justify-between items-center">
+        <h1 className="text-2xl font-bold text-indigo-600">Content Creator AI</h1>
+        <div className="flex items-center gap-4">
+          {currentView !== 'login' && currentView !== 'signup' && (
+            <>
+              <button
+                onClick={() => setCurrentView('dashboard')}
+                className={`text-sm font-medium ${
+                  currentView === 'dashboard' ? 'text-indigo-600' : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                Create
+              </button>
+              <button
+                onClick={() => {
+                  setCurrentView('history');
+                  fetchContentHistory();
+                  fetchContentStats();
+                }}
+                className={`flex items-center gap-1 text-sm font-medium ${
+                  currentView === 'history' || currentView === 'content-detail' 
+                    ? 'text-indigo-600' 
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                <History size={18} />
+                History
+              </button>
+            </>
+          )}
+          {isTrialActive() && (
+            <div className="flex items-center gap-2 bg-yellow-50 px-3 py-1 rounded-full border border-yellow-200">
+              <span className="text-sm text-yellow-800 font-medium">
+                Trial: {getTrialDays()} days left
+              </span>
+              <button
+                onClick={() => setCurrentView('upgrade')}
+                className="text-xs bg-yellow-600 text-white px-2 py-1 rounded hover:bg-yellow-700"
+              >
+                Upgrade
+              </button>
+            </div>
+          )}
+          {subscriptionStatus?.hasActiveSubscription && (
+            <span className="flex items-center gap-2 bg-green-50 px-3 py-1 rounded-full border border-green-200">
+              <CheckCircle size={16} className="text-green-600" />
+              <span className="text-sm text-green-800 font-medium">Pro</span>
+            </span>
+          )}
+          {user && (
+            <>
+              <span className="text-sm font-medium text-gray-900">
+                {user?.firstName} {user?.lastName}
+              </span>
+              <button
+                onClick={handleLogout}
+                className="text-sm text-gray-600 hover:text-gray-900"
+              >
+                Logout
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+    </nav>
+  );
+
+  // Content History View
+  if (currentView === 'history') {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <Navigation />
+        
+        <div className="max-w-6xl mx-auto px-4 py-12">
+          <div className="mb-8">
+            <h2 className="text-3xl font-bold text-gray-900 mb-2">Content History</h2>
+            <p className="text-gray-600">View and manage all your generated content</p>
+          </div>
+
+          {/* Stats Cards */}
+          {historyStats && (
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+              <div className="bg-white rounded-lg p-6 shadow-sm border border-gray-200">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-gray-600">Total Content</p>
+                    <p className="text-2xl font-bold text-gray-900">{historyStats.totalContent}</p>
+                  </div>
+                  <FileText className="text-indigo-600" size={32} />
+                </div>
+              </div>
+              {historyStats.byType.map(stat => (
+                <div key={stat.type} className="bg-white rounded-lg p-6 shadow-sm border border-gray-200">
+                  <p className="text-sm text-gray-600">{getContentTypeDisplay(stat.type)}</p>
+                  <p className="text-2xl font-bold text-gray-900">{stat.count}</p>
+                  <p className="text-xs text-gray-500 mt-1">{stat.totalWords.toLocaleString()} words</p>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Filter Tabs */}
+          <div className="flex gap-2 mb-6">
+            {['all', 'blog', 'x_threads', 'linkedin'].map(filter => (
+              <button
+                key={filter}
+                onClick={() => {
+                  setHistoryFilter(filter);
+                  setTimeout(() => fetchContentHistory(), 0);
+                }}
+                className={`px-4 py-2 rounded-lg font-medium transition ${
+                  historyFilter === filter
+                    ? 'bg-indigo-600 text-white'
+                    : 'bg-white text-gray-700 border border-gray-200 hover:border-gray-300'
+                }`}
+              >
+                {filter === 'all' ? 'All' : getContentTypeDisplay(filter)}
+              </button>
+            ))}
+          </div>
+
+          {/* Content List */}
+          {isLoading ? (
+            <div className="flex justify-center items-center py-12">
+              <Loader2 className="animate-spin text-indigo-600" size={32} />
+            </div>
+          ) : contentHistory.length === 0 ? (
+            <div className="bg-white rounded-lg p-12 text-center">
+              <History className="mx-auto text-gray-400 mb-4" size={48} />
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">No content yet</h3>
+              <p className="text-gray-600 mb-4">Start creating content to see it here</p>
+              <button
+                onClick={() => setCurrentView('dashboard')}
+                className="bg-indigo-600 text-white px-6 py-2 rounded-lg hover:bg-indigo-700"
+              >
+                Create Content
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {contentHistory.map(content => (
+                <div key={content.id} className="bg-white rounded-lg p-6 shadow-sm border border-gray-200 hover:border-indigo-200 transition">
+                  <div className="flex justify-between items-start">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className="px-3 py-1 bg-indigo-50 text-indigo-700 rounded-full text-xs font-medium">
+                          {getContentTypeDisplay(content.contentType)}
+                        </span>
+                        <span className="flex items-center gap-1 text-xs text-gray-500">
+                          <Calendar size={14} />
+                          {formatDate(content.createdAt)}
+                        </span>
+                      </div>
+                      <h3 className="text-lg font-semibold text-gray-900 mb-2">{content.topic}</h3>
+                      {content.keywords && (
+                        <p className="text-sm text-gray-600 mb-2">
+                          Keywords: {content.keywords}
+                        </p>
+                      )}
+                      <p className="text-sm text-gray-500">
+                        {content.wordCount?.toLocaleString()} words
+                      </p>
+                    </div>
+                    <div className="flex gap-2 ml-4">
+                      <button
+                        onClick={() => viewContentDetail(content.id)}
+                        className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg transition"
+                        title="View content"
+                      >
+                        <Eye size={20} />
+                      </button>
+                      <button
+                        onClick={() => deleteContent(content.id)}
+                        className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition"
+                        title="Delete content"
+                      >
+                        <Trash2 size={20} />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // Content Detail View
+  if (currentView === 'content-detail' && selectedContent) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <Navigation />
+        
+        <div className="max-w-4xl mx-auto px-4 py-12">
+          <button
+            onClick={() => setCurrentView('history')}
+            className="flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-6"
+          >
+            ← Back to History
+          </button>
+
+          <div className="bg-white rounded-2xl shadow-lg p-8 mb-6">
+            <div className="flex justify-between items-start mb-6">
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="px-3 py-1 bg-indigo-50 text-indigo-700 rounded-full text-sm font-medium">
+                    {getContentTypeDisplay(selectedContent.contentType)}
+                  </span>
+                  <span className="text-sm text-gray-500">
+                    {formatDate(selectedContent.createdAt)}
+                  </span>
+                </div>
+                <h2 className="text-2xl font-bold text-gray-900 mb-2">{selectedContent.topic}</h2>
+                {selectedContent.keywords && (
+                  <p className="text-sm text-gray-600 mb-2">
+                    Keywords: {selectedContent.keywords}
+                  </p>
+                )}
+                <p className="text-sm text-gray-500">
+                  {selectedContent.wordCount?.toLocaleString()} words
+                </p>
+              </div>
+              <button
+                onClick={() => handleCopy(selectedContent.generatedContent)}
+                className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition"
+              >
+                {copied ? (
+                  <>
+                    <CheckCircle size={18} />
+                    Copied!
+                  </>
+                ) : (
+                  <>
+                    <Copy size={18} />
+                    Copy
+                  </>
+                )}
+              </button>
+            </div>
+            
+            <div className="prose max-w-none bg-gray-50 rounded-lg p-6 border border-gray-200">
+              <div className="whitespace-pre-wrap text-gray-800 leading-relaxed">
+                {selectedContent.generatedContent}
+              </div>
+            </div>
+          </div>
+
+          <div className="flex gap-4">
+            <button
+              onClick={() => {
+                setContentType(getContentTypeDisplay(selectedContent.contentType));
+                setTopic(selectedContent.topic);
+                setKeywords(selectedContent.keywords || '');
+                setCurrentView('dashboard');
+              }}
+              className="flex-1 bg-indigo-50 text-indigo-700 py-3 rounded-lg font-semibold hover:bg-indigo-100 transition border border-indigo-200"
+            >
+              Create Similar Content
+            </button>
+            <button
+              onClick={() => deleteContent(selectedContent.id)}
+              className="px-6 bg-red-50 text-red-700 py-3 rounded-lg font-semibold hover:bg-red-100 transition border border-red-200"
+            >
+              Delete
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // Upgrade/Subscription View
   if (currentView === 'upgrade') {
@@ -517,41 +909,7 @@ export default function ContentCreatorApp() {
   if (currentView === 'dashboard') {
     return (
       <div className="min-h-screen bg-gray-50">
-        <nav className="bg-white shadow-sm border-b">
-          <div className="max-w-6xl mx-auto px-4 py-4 flex justify-between items-center">
-            <h1 className="text-2xl font-bold text-indigo-600">Content Creator AI</h1>
-            <div className="flex items-center gap-4">
-              {isTrialActive() && (
-                <div className="flex items-center gap-2 bg-yellow-50 px-3 py-1 rounded-full border border-yellow-200">
-                  <span className="text-sm text-yellow-800 font-medium">
-                    Trial: {getTrialDays()} days left
-                  </span>
-                  <button
-                    onClick={() => setCurrentView('upgrade')}
-                    className="text-xs bg-yellow-600 text-white px-2 py-1 rounded hover:bg-yellow-700"
-                  >
-                    Upgrade
-                  </button>
-                </div>
-              )}
-              {subscriptionStatus?.hasActiveSubscription && (
-                <span className="flex items-center gap-2 bg-green-50 px-3 py-1 rounded-full border border-green-200">
-                  <CheckCircle size={16} className="text-green-600" />
-                  <span className="text-sm text-green-800 font-medium">Pro</span>
-                </span>
-              )}
-              <span className="text-sm font-medium text-gray-900">
-                {user?.firstName} {user?.lastName}
-              </span>
-              <button
-                onClick={handleLogout}
-                className="text-sm text-gray-600 hover:text-gray-900"
-              >
-                Logout
-              </button>
-            </div>
-          </div>
-        </nav>
+        <Navigation />
         
         <div className="max-w-3xl mx-auto px-4 py-12">
           {!hasActiveAccess() && (
@@ -654,27 +1012,7 @@ export default function ContentCreatorApp() {
   if (currentView === 'result') {
     return (
       <div className="min-h-screen bg-gray-50">
-        <nav className="bg-white shadow-sm border-b">
-          <div className="max-w-6xl mx-auto px-4 py-4 flex justify-between items-center">
-            <h1 className="text-2xl font-bold text-indigo-600">Content Creator AI</h1>
-            <div className="flex items-center gap-4">
-              {isTrialActive() && (
-                <span className="text-sm text-gray-600">
-                  Trial: {getTrialDays()} days left
-                </span>
-              )}
-              <span className="text-sm font-medium text-gray-900">
-                {user?.firstName} {user?.lastName}
-              </span>
-              <button
-                onClick={handleLogout}
-                className="text-sm text-gray-600 hover:text-gray-900"
-              >
-                Logout
-              </button>
-            </div>
-          </div>
-        </nav>
+        <Navigation />
         
         <div className="max-w-4xl mx-auto px-4 py-12">
           <div className="bg-white rounded-2xl shadow-lg p-8 mb-6">
@@ -684,7 +1022,7 @@ export default function ContentCreatorApp() {
                 <p className="text-gray-600">AI-optimized and ready to publish</p>
               </div>
               <button
-                onClick={handleCopy}
+                onClick={() => handleCopy()}
                 className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition"
               >
                 {copied ? (
