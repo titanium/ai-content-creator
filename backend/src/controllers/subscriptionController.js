@@ -5,6 +5,7 @@ const { PrismaClient } = require('@prisma/client');
 const { 
   createCheckoutSession, 
   cancelSubscription,
+  createBillingPortalSession,
   constructWebhookEvent 
 } = require('../services/stripeService');
 
@@ -47,6 +48,37 @@ exports.createCheckout = async (req, res) => {
   }
 };
 
+// CREATE BILLING PORTAL SESSION - Redirect to Stripe Customer Portal
+exports.createPortalSession = async (req, res) => {
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: req.userId },
+      include: { subscription: true }
+    });
+
+    if (!user || !user.subscription.stripeCustomerId) {
+      return res.status(400).json({ 
+        error: 'No subscription found' 
+      });
+    }
+
+    // Create billing portal session
+    const session = await createBillingPortalSession(
+      user.subscription.stripeCustomerId
+    );
+
+    res.json({
+      url: session.url
+    });
+
+  } catch (error) {
+    console.error('Create portal session error:', error);
+    res.status(500).json({ 
+      error: 'Failed to create billing portal session' 
+    });
+  }
+};
+
 // STRIPE WEBHOOK - Handle Stripe events
 exports.handleWebhook = async (req, res) => {
   try {
@@ -73,6 +105,10 @@ exports.handleWebhook = async (req, res) => {
 
       case 'invoice.payment_failed':
         await handlePaymentFailed(event.data.object);
+        break;
+
+      case 'invoice.payment_succeeded':
+        await handlePaymentSucceeded(event.data.object);
         break;
 
       default:
@@ -127,16 +163,26 @@ async function handleSubscriptionUpdated(subscription) {
       return;
     }
 
+    // Determine status based on Stripe subscription status
+    let status = 'active';
+    if (subscription.status === 'canceled' || subscription.cancel_at_period_end) {
+      status = 'canceled';
+    } else if (subscription.status === 'past_due') {
+      status = 'past_due';
+    } else if (subscription.status === 'unpaid') {
+      status = 'unpaid';
+    }
+
     await prisma.subscription.update({
       where: { id: existingSub.id },
       data: {
         stripePriceId: subscription.items.data[0].price.id,
         stripeCurrentPeriodEnd: new Date(subscription.current_period_end * 1000),
-        status: subscription.status === 'active' ? 'active' : 'canceled'
+        status: status
       }
     });
 
-    console.log(`Subscription updated: ${stripeSubscriptionId}`);
+    console.log(`Subscription updated: ${stripeSubscriptionId}, status: ${status}`);
   } catch (error) {
     console.error('Handle subscription updated error:', error);
   }
@@ -180,11 +226,41 @@ async function handlePaymentFailed(invoice) {
     });
 
     if (subscription) {
-      // You might want to send an email notification here
+      await prisma.subscription.update({
+        where: { id: subscription.id },
+        data: {
+          status: 'past_due'
+        }
+      });
+
       console.log(`Payment failed for customer: ${customerId}`);
     }
   } catch (error) {
     console.error('Handle payment failed error:', error);
+  }
+}
+
+// Handle successful payments
+async function handlePaymentSucceeded(invoice) {
+  try {
+    const customerId = invoice.customer;
+
+    const subscription = await prisma.subscription.findFirst({
+      where: { stripeCustomerId: customerId }
+    });
+
+    if (subscription && subscription.status === 'past_due') {
+      await prisma.subscription.update({
+        where: { id: subscription.id },
+        data: {
+          status: 'active'
+        }
+      });
+
+      console.log(`Payment succeeded, reactivated subscription for customer: ${customerId}`);
+    }
+  } catch (error) {
+    console.error('Handle payment succeeded error:', error);
   }
 }
 
@@ -212,13 +288,26 @@ exports.getSubscriptionStatus = async (req, res) => {
       );
     }
 
+    // Calculate days until next billing
+    let daysUntilRenewal = null;
+    if (subscription.stripeCurrentPeriodEnd) {
+      const now = new Date();
+      const periodEnd = new Date(subscription.stripeCurrentPeriodEnd);
+      daysUntilRenewal = Math.max(
+        0,
+        Math.ceil((periodEnd - now) / (1000 * 60 * 60 * 24))
+      );
+    }
+
     res.json({
       status: subscription.status,
       isTrialActive: subscription.isTrialActive,
       trialDaysRemaining,
       trialEndDate: subscription.trialEndDate,
       stripeCurrentPeriodEnd: subscription.stripeCurrentPeriodEnd,
-      hasActiveSubscription: subscription.status === 'active'
+      daysUntilRenewal,
+      hasActiveSubscription: subscription.status === 'active',
+      canManageBilling: !!subscription.stripeCustomerId
     });
 
   } catch (error) {
@@ -242,7 +331,7 @@ exports.cancelSubscription = async (req, res) => {
       });
     }
 
-    // Cancel in Stripe
+    // Cancel in Stripe (at period end)
     await cancelSubscription(subscription.stripeSubscriptionId);
 
     // Update database
