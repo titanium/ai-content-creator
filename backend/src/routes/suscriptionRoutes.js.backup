@@ -15,9 +15,6 @@ router.use(authenticate);
 // Create checkout session
 router.post('/create-checkout', subscriptionController.createCheckout);
 
-// Create billing portal session
-router.post('/create-portal', subscriptionController.createPortalSession);
-
 // Get subscription status
 router.get('/status', subscriptionController.getSubscriptionStatus);
 
