@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { AlertCircle, Copy, CheckCircle, Loader2, Sparkles, CreditCard, History, Trash2, Eye, Calendar, FileText } from 'lucide-react';
+import { AlertCircle, Copy, CheckCircle, Loader2, Sparkles, CreditCard, History, Trash2, Eye, Calendar, FileText, Settings, CreditCard as CreditCardIcon, Calendar as CalendarIcon } from 'lucide-react';
 
 const API_URL = 'https://ai-content-creator-backend-production.up.railway.app/api';
 
@@ -10,6 +10,7 @@ export default function ContentCreatorApp() {
   const [token, setToken] = useState(null);
   const [copied, setCopied] = useState(false);
   const [subscriptionStatus, setSubscriptionStatus] = useState(null);
+  const [subscriptionDetails, setSubscriptionDetails] = useState(null);
   
   const [loginData, setLoginData] = useState({ email: '', password: '' });
   const [signupData, setSignupData] = useState({
@@ -194,6 +195,37 @@ export default function ContentCreatorApp() {
 
     } catch (err) {
       setError('Failed to connect to payment service');
+      console.error(err);
+      setIsLoading(false);
+    }
+  };
+
+  const handleManageBilling = async () => {
+    setIsLoading(true);
+    setError('');
+
+    try {
+      const response = await fetch(`${API_URL}/subscription/create-portal`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        setError(data.error || 'Failed to open billing portal');
+        setIsLoading(false);
+        return;
+      }
+
+      // Redirect to Stripe Customer Portal
+      window.location.href = data.url;
+
+    } catch (err) {
+      setError('Failed to connect to billing service');
       console.error(err);
       setIsLoading(false);
     }
@@ -432,6 +464,20 @@ export default function ContentCreatorApp() {
                 <History size={18} />
                 History
               </button>
+              <button
+                onClick={() => {
+                  setCurrentView('settings');
+                  fetchSubscriptionStatus(token);
+                }}
+                className={`flex items-center gap-1 text-sm font-medium ${
+                  currentView === 'settings' 
+                    ? 'text-indigo-600' 
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                <Settings size={18} />
+                Settings
+              </button>
             </>
           )}
           {isTrialActive() && (
@@ -583,6 +629,192 @@ export default function ContentCreatorApp() {
                   </div>
                 </div>
               ))}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // Settings/Subscription Management View
+  if (currentView === 'settings') {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <Navigation />
+        
+        <div className="max-w-4xl mx-auto px-4 py-12">
+          <div className="mb-8">
+            <h2 className="text-3xl font-bold text-gray-900 mb-2">Settings</h2>
+            <p className="text-gray-600">Manage your account and subscription</p>
+          </div>
+
+          {/* Account Information */}
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Account Information</h3>
+            <div className="space-y-3">
+              <div>
+                <label className="text-sm text-gray-600">Name</label>
+                <p className="text-gray-900 font-medium">{user?.firstName} {user?.lastName}</p>
+              </div>
+              <div>
+                <label className="text-sm text-gray-600">Email</label>
+                <p className="text-gray-900 font-medium">{user?.email}</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Subscription Status */}
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-900">Subscription</h3>
+              {subscriptionStatus?.hasActiveSubscription && (
+                <span className="flex items-center gap-2 bg-green-50 px-3 py-1 rounded-full border border-green-200">
+                  <CheckCircle size={16} className="text-green-600" />
+                  <span className="text-sm text-green-800 font-medium">Active</span>
+                </span>
+              )}
+              {isTrialActive() && (
+                <span className="flex items-center gap-2 bg-yellow-50 px-3 py-1 rounded-full border border-yellow-200">
+                  <CalendarIcon size={16} className="text-yellow-600" />
+                  <span className="text-sm text-yellow-800 font-medium">Trial</span>
+                </span>
+              )}
+              {!subscriptionStatus?.hasActiveSubscription && !isTrialActive() && (
+                <span className="flex items-center gap-2 bg-red-50 px-3 py-1 rounded-full border border-red-200">
+                  <AlertCircle size={16} className="text-red-600" />
+                  <span className="text-sm text-red-800 font-medium">Expired</span>
+                </span>
+              )}
+            </div>
+
+            <div className="space-y-4">
+              {/* Trial Info */}
+              {isTrialActive() && (
+                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                  <div className="flex items-start gap-3">
+                    <Sparkles className="text-yellow-600 flex-shrink-0 mt-0.5" size={20} />
+                    <div className="flex-1">
+                      <p className="font-medium text-gray-900 mb-1">Free Trial Active</p>
+                      <p className="text-sm text-gray-700">
+                        You have <strong>{getTrialDays()} days</strong> remaining in your trial.
+                      </p>
+                      <p className="text-xs text-gray-600 mt-2">
+                        Trial ends: {subscriptionStatus?.trialEndDate ? formatDate(subscriptionStatus.trialEndDate) : 'N/A'}
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setCurrentView('upgrade')}
+                    className="mt-4 w-full bg-yellow-600 text-white py-2 rounded-lg hover:bg-yellow-700 font-medium"
+                  >
+                    Upgrade to Pro
+                  </button>
+                </div>
+              )}
+
+              {/* Active Subscription Info */}
+              {subscriptionStatus?.hasActiveSubscription && (
+                <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                  <div className="flex items-start gap-3">
+                    <CreditCardIcon className="text-green-600 flex-shrink-0 mt-0.5" size={20} />
+                    <div className="flex-1">
+                      <p className="font-medium text-gray-900 mb-1">Pro Subscription</p>
+                      <p className="text-sm text-gray-700 mb-2">
+                        You have unlimited access to all features.
+                      </p>
+                      {subscriptionStatus?.daysUntilRenewal !== null && (
+                        <p className="text-xs text-gray-600">
+                          Next billing date: {subscriptionStatus?.stripeCurrentPeriodEnd ? formatDate(subscriptionStatus.stripeCurrentPeriodEnd) : 'N/A'}
+                          {' '}({subscriptionStatus.daysUntilRenewal} days)
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                  {subscriptionStatus?.canManageBilling && (
+                    <button
+                      onClick={handleManageBilling}
+                      disabled={isLoading}
+                      className="mt-4 w-full bg-white border-2 border-green-600 text-green-700 py-2 rounded-lg hover:bg-green-50 font-medium flex items-center justify-center gap-2"
+                    >
+                      {isLoading ? (
+                        <>
+                          <Loader2 className="animate-spin" size={18} />
+                          Loading...
+                        </>
+                      ) : (
+                        <>
+                          <CreditCardIcon size={18} />
+                          Manage Billing
+                        </>
+                      )}
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {/* Expired Subscription */}
+              {!subscriptionStatus?.hasActiveSubscription && !isTrialActive() && (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                  <div className="flex items-start gap-3">
+                    <AlertCircle className="text-red-600 flex-shrink-0 mt-0.5" size={20} />
+                    <div className="flex-1">
+                      <p className="font-medium text-gray-900 mb-1">Subscription Expired</p>
+                      <p className="text-sm text-gray-700 mb-2">
+                        Your trial has ended. Subscribe to continue creating content.
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setCurrentView('upgrade')}
+                    className="mt-4 w-full bg-red-600 text-white py-2 rounded-lg hover:bg-red-700 font-medium"
+                  >
+                    Subscribe Now
+                  </button>
+                </div>
+              )}
+
+              {/* Billing Portal Info */}
+              {subscriptionStatus?.canManageBilling && (
+                <div className="border-t pt-4 mt-4">
+                  <p className="text-sm text-gray-600 mb-3">
+                    Manage your subscription in the Stripe Customer Portal:
+                  </p>
+                  <ul className="text-sm text-gray-600 space-y-1 ml-4">
+                    <li>• Update payment method</li>
+                    <li>• View billing history and invoices</li>
+                    <li>• Cancel subscription</li>
+                    <li>• Update billing information</li>
+                  </ul>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Usage Stats */}
+          {historyStats && (
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Usage Statistics</h3>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div>
+                  <p className="text-sm text-gray-600">Total Content</p>
+                  <p className="text-2xl font-bold text-gray-900">{historyStats.totalContent}</p>
+                </div>
+                {historyStats.byType.map(stat => (
+                  <div key={stat.type}>
+                    <p className="text-sm text-gray-600">{getContentTypeDisplay(stat.type)}</p>
+                    <p className="text-2xl font-bold text-gray-900">{stat.count}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {error && (
+            <div className="mt-6 bg-red-50 border border-red-200 rounded-lg p-4">
+              <div className="flex items-center gap-2 text-red-800">
+                <AlertCircle size={18} />
+                <span>{error}</span>
+              </div>
             </div>
           )}
         </div>
