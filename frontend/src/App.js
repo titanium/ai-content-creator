@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { AlertCircle, Copy, CheckCircle, Loader2 } from 'lucide-react';
+import { AlertCircle, Copy, CheckCircle, Loader2, Sparkles, CreditCard } from 'lucide-react';
 
 const API_URL = 'https://ai-content-creator-backend-production.up.railway.app/api';
 
@@ -9,6 +9,7 @@ export default function ContentCreatorApp() {
   const [user, setUser] = useState(null);
   const [token, setToken] = useState(null);
   const [copied, setCopied] = useState(false);
+  const [subscriptionStatus, setSubscriptionStatus] = useState(null);
   
   const [loginData, setLoginData] = useState({ email: '', password: '' });
   const [signupData, setSignupData] = useState({
@@ -28,8 +29,70 @@ export default function ContentCreatorApp() {
       setToken(savedToken);
       setUser(JSON.parse(savedUser));
       setCurrentView('dashboard');
+      fetchSubscriptionStatus(savedToken);
+    }
+
+    // Check for successful Stripe checkout
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('success') === 'true') {
+      setError('');
+      // Give Stripe webhook time to process
+      setTimeout(() => {
+        if (savedToken) {
+          fetchSubscriptionStatus(savedToken);
+          // Clear URL params
+          window.history.replaceState({}, document.title, window.location.pathname);
+        }
+      }, 2000);
     }
   }, []);
+
+  const fetchSubscriptionStatus = async (authToken) => {
+    try {
+      const response = await fetch(`${API_URL}/subscription/status`, {
+        headers: {
+          'Authorization': `Bearer ${authToken}`
+        }
+      });
+      const data = await response.json();
+      if (response.ok) {
+        setSubscriptionStatus(data);
+      }
+    } catch (err) {
+      console.error('Failed to fetch subscription status:', err);
+    }
+  };
+
+  const handleCreateCheckout = async () => {
+    setIsLoading(true);
+    setError('');
+
+    try {
+      const response = await fetch(`${API_URL}/subscription/create-checkout`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        setError(data.error || 'Failed to create checkout session');
+        setIsLoading(false);
+        return;
+      }
+
+      // Redirect to Stripe Checkout
+      window.location.href = data.url;
+
+    } catch (err) {
+      setError('Failed to connect to payment service');
+      console.error(err);
+      setIsLoading(false);
+    }
+  };
 
   const handleSignup = async () => {
     setError('');
@@ -76,6 +139,7 @@ export default function ContentCreatorApp() {
       setToken(data.token);
       setUser(data.user);
       setCurrentView('dashboard');
+      fetchSubscriptionStatus(data.token);
       
     } catch (err) {
       setError('Failed to connect to server. Make sure backend is running.');
@@ -118,6 +182,7 @@ export default function ContentCreatorApp() {
       setToken(data.token);
       setUser(data.user);
       setCurrentView('dashboard');
+      fetchSubscriptionStatus(data.token);
       
     } catch (err) {
       setError('Failed to connect to server. Make sure backend is running.');
@@ -155,6 +220,7 @@ export default function ContentCreatorApp() {
       if (!response.ok) {
         if (data.needsSubscription) {
           setError('Your trial has expired. Please subscribe to continue.');
+          setCurrentView('upgrade');
         } else {
           setError(data.error || 'Failed to generate content');
         }
@@ -183,16 +249,113 @@ export default function ContentCreatorApp() {
     localStorage.removeItem('user');
     setToken(null);
     setUser(null);
+    setSubscriptionStatus(null);
     setCurrentView('login');
   };
 
   const getTrialDays = () => {
+    if (subscriptionStatus) {
+      return subscriptionStatus.trialDaysRemaining || 0;
+    }
     if (!user?.subscription) return 0;
     const trialEnd = new Date(user.subscription.trialEndDate);
     const now = new Date();
     const daysLeft = Math.ceil((trialEnd - now) / (1000 * 60 * 60 * 24));
     return Math.max(0, daysLeft);
   };
+
+  const isTrialActive = () => {
+    if (subscriptionStatus) {
+      return subscriptionStatus.isTrialActive && getTrialDays() > 0;
+    }
+    return user?.subscription?.isTrialActive && getTrialDays() > 0;
+  };
+
+  const hasActiveAccess = () => {
+    if (subscriptionStatus) {
+      return subscriptionStatus.hasActiveSubscription || isTrialActive();
+    }
+    return user?.subscription?.status === 'active' || isTrialActive();
+  };
+
+  // Upgrade/Subscription View
+  if (currentView === 'upgrade') {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
+        <div className="bg-white rounded-2xl shadow-xl p-8 w-full max-w-md">
+          <div className="text-center mb-6">
+            <div className="w-16 h-16 bg-indigo-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <Sparkles className="text-indigo-600" size={32} />
+            </div>
+            <h1 className="text-3xl font-bold text-gray-900 mb-2">Upgrade to Pro</h1>
+            <p className="text-gray-600">Your trial has ended. Continue creating amazing content!</p>
+          </div>
+
+          <div className="bg-gradient-to-br from-indigo-50 to-purple-50 rounded-xl p-6 mb-6 border-2 border-indigo-200">
+            <div className="text-center mb-4">
+              <div className="text-4xl font-bold text-indigo-600">$29</div>
+              <div className="text-gray-600">per month</div>
+            </div>
+
+            <div className="space-y-3 mb-6">
+              <div className="flex items-start gap-2">
+                <CheckCircle size={20} className="text-green-500 flex-shrink-0 mt-0.5" />
+                <span className="text-gray-700">Unlimited AI-generated content</span>
+              </div>
+              <div className="flex items-start gap-2">
+                <CheckCircle size={20} className="text-green-500 flex-shrink-0 mt-0.5" />
+                <span className="text-gray-700">All content types (Blog, X, LinkedIn)</span>
+              </div>
+              <div className="flex items-start gap-2">
+                <CheckCircle size={20} className="text-green-500 flex-shrink-0 mt-0.5" />
+                <span className="text-gray-700">SEO-optimized content</span>
+              </div>
+              <div className="flex items-start gap-2">
+                <CheckCircle size={20} className="text-green-500 flex-shrink-0 mt-0.5" />
+                <span className="text-gray-700">Content history & analytics</span>
+              </div>
+              <div className="flex items-start gap-2">
+                <CheckCircle size={20} className="text-green-500 flex-shrink-0 mt-0.5" />
+                <span className="text-gray-700">Priority support</span>
+              </div>
+            </div>
+
+            <button
+              onClick={handleCreateCheckout}
+              disabled={isLoading}
+              className="w-full bg-indigo-600 text-white py-4 rounded-lg font-semibold hover:bg-indigo-700 transition disabled:bg-gray-400 flex items-center justify-center gap-2"
+            >
+              {isLoading ? (
+                <>
+                  <Loader2 className="animate-spin" size={20} />
+                  Loading...
+                </>
+              ) : (
+                <>
+                  <CreditCard size={20} />
+                  Subscribe Now
+                </>
+              )}
+            </button>
+          </div>
+
+          {error && (
+            <div className="flex items-center gap-2 text-red-600 text-sm mb-4">
+              <AlertCircle size={16} />
+              <span>{error}</span>
+            </div>
+          )}
+
+          <button
+            onClick={() => setCurrentView('dashboard')}
+            className="w-full text-gray-600 hover:text-gray-900 text-sm"
+          >
+            Back to Dashboard
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   if (currentView === 'login') {
     return (
@@ -358,9 +521,23 @@ export default function ContentCreatorApp() {
           <div className="max-w-6xl mx-auto px-4 py-4 flex justify-between items-center">
             <h1 className="text-2xl font-bold text-indigo-600">Content Creator AI</h1>
             <div className="flex items-center gap-4">
-              {user?.subscription?.isTrialActive && (
-                <span className="text-sm text-gray-600">
-                  Trial: {getTrialDays()} days left
+              {isTrialActive() && (
+                <div className="flex items-center gap-2 bg-yellow-50 px-3 py-1 rounded-full border border-yellow-200">
+                  <span className="text-sm text-yellow-800 font-medium">
+                    Trial: {getTrialDays()} days left
+                  </span>
+                  <button
+                    onClick={() => setCurrentView('upgrade')}
+                    className="text-xs bg-yellow-600 text-white px-2 py-1 rounded hover:bg-yellow-700"
+                  >
+                    Upgrade
+                  </button>
+                </div>
+              )}
+              {subscriptionStatus?.hasActiveSubscription && (
+                <span className="flex items-center gap-2 bg-green-50 px-3 py-1 rounded-full border border-green-200">
+                  <CheckCircle size={16} className="text-green-600" />
+                  <span className="text-sm text-green-800 font-medium">Pro</span>
                 </span>
               )}
               <span className="text-sm font-medium text-gray-900">
@@ -377,6 +554,24 @@ export default function ContentCreatorApp() {
         </nav>
         
         <div className="max-w-3xl mx-auto px-4 py-12">
+          {!hasActiveAccess() && (
+            <div className="bg-red-50 border-2 border-red-200 rounded-xl p-6 mb-6">
+              <div className="flex items-start gap-3">
+                <AlertCircle className="text-red-600 flex-shrink-0 mt-0.5" size={24} />
+                <div className="flex-1">
+                  <h3 className="font-semibold text-red-900 mb-1">Trial Expired</h3>
+                  <p className="text-red-800 mb-3">Your free trial has ended. Subscribe to continue creating content.</p>
+                  <button
+                    onClick={() => setCurrentView('upgrade')}
+                    className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 font-semibold"
+                  >
+                    View Plans
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
           <div className="bg-white rounded-2xl shadow-lg p-8">
             <h2 className="text-2xl font-bold text-gray-900 mb-2">What would you like to create today?</h2>
             <p className="text-gray-600 mb-8">Choose your content type and let AI do the heavy lifting</p>
@@ -437,7 +632,7 @@ export default function ContentCreatorApp() {
               
               <button
                 onClick={handleGenerateContent}
-                disabled={isLoading || !contentType}
+                disabled={isLoading || !contentType || !hasActiveAccess()}
                 className="w-full bg-indigo-600 text-white py-4 rounded-lg font-semibold hover:bg-indigo-700 transition disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               >
                 {isLoading ? (
@@ -463,7 +658,7 @@ export default function ContentCreatorApp() {
           <div className="max-w-6xl mx-auto px-4 py-4 flex justify-between items-center">
             <h1 className="text-2xl font-bold text-indigo-600">Content Creator AI</h1>
             <div className="flex items-center gap-4">
-              {user?.subscription?.isTrialActive && (
+              {isTrialActive() && (
                 <span className="text-sm text-gray-600">
                   Trial: {getTrialDays()} days left
                 </span>
