@@ -1,45 +1,25 @@
-// Authentication Controller
-// Handles user signup, login, and profile retrieval
+// Auth Controller with Email Verification
+// Handles user authentication, registration, and email verification
 
-const bcrypt = require('bcryptjs');
+const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
 const { PrismaClient } = require('@prisma/client');
+const emailService = require('../services/emailService');
 
 const prisma = new PrismaClient({
   log: ['error', 'warn'],
 });
 
-// Generate JWT token
-const generateToken = (userId) => {
-  return jwt.sign(
-    { userId },
-    process.env.JWT_SECRET,
-    { expiresIn: '7d' } // Token expires in 7 days
-  );
-};
-
-// Calculate trial end date (15 days from now)
-const getTrialEndDate = () => {
-  const date = new Date();
-  date.setDate(date.getDate() + 15);
-  return date;
-};
-
-// SIGNUP - Create new user account
+// SIGNUP - Register new user
 exports.signup = async (req, res) => {
   try {
     const { email, password, firstName, lastName } = req.body;
 
-    // Validation
+    // Validate input
     if (!email || !password || !firstName || !lastName) {
       return res.status(400).json({ 
         error: 'All fields are required' 
-      });
-    }
-
-    if (password.length < 8) {
-      return res.status(400).json({ 
-        error: 'Password must be at least 8 characters' 
       });
     }
 
@@ -57,16 +37,24 @@ exports.signup = async (req, res) => {
     // Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // Create user with subscription
+    // Generate verification token
+    const verificationToken = crypto.randomBytes(32).toString('hex');
+    const verificationExpires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+
+    // Create user
     const user = await prisma.user.create({
       data: {
         email: email.toLowerCase(),
         password: hashedPassword,
         firstName,
         lastName,
+        emailVerified: false,
+        verificationToken,
+        verificationExpires,
         subscription: {
           create: {
-            trialEndDate: getTrialEndDate(),
+            trialStartDate: new Date(),
+            trialEndDate: new Date(Date.now() + 15 * 24 * 60 * 60 * 1000), // 15 days
             isTrialActive: true,
             status: 'trial'
           }
@@ -77,16 +65,18 @@ exports.signup = async (req, res) => {
       }
     });
 
-    // Generate JWT token
-    const token = generateToken(user.id);
+    // Send verification email
+    await emailService.sendVerificationEmail(
+      user.email,
+      user.firstName,
+      verificationToken
+    );
 
-    // Remove password from response
-    const { password: _, ...userWithoutPassword } = user;
-
+    // Return success (but don't log them in yet)
     res.status(201).json({
-      message: 'Account created successfully',
-      token,
-      user: userWithoutPassword
+      message: 'Account created! Please check your email to verify your account.',
+      requiresVerification: true,
+      email: user.email
     });
 
   } catch (error) {
@@ -97,12 +87,142 @@ exports.signup = async (req, res) => {
   }
 };
 
-// LOGIN - Authenticate existing user
+// VERIFY EMAIL - Verify user's email address
+exports.verifyEmail = async (req, res) => {
+  try {
+    const { token } = req.query;
+
+    if (!token) {
+      return res.status(400).json({ 
+        error: 'Verification token is required' 
+      });
+    }
+
+    // Find user with this token
+    const user = await prisma.user.findUnique({
+      where: { verificationToken: token },
+      include: { subscription: true }
+    });
+
+    if (!user) {
+      return res.status(400).json({ 
+        error: 'Invalid or expired verification token' 
+      });
+    }
+
+    // Check if token is expired
+    if (new Date() > user.verificationExpires) {
+      return res.status(400).json({ 
+        error: 'Verification token has expired',
+        expired: true,
+        email: user.email
+      });
+    }
+
+    // Update user as verified
+    const updatedUser = await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        emailVerified: true,
+        verificationToken: null,
+        verificationExpires: null
+      },
+      include: { subscription: true }
+    });
+
+    // Generate JWT token for auto-login
+    const jwtToken = jwt.sign(
+      { userId: updatedUser.id },
+      process.env.JWT_SECRET,
+      { expiresIn: '7d' }
+    );
+
+    res.json({
+      message: 'Email verified successfully!',
+      token: jwtToken,
+      user: {
+        id: updatedUser.id,
+        email: updatedUser.email,
+        firstName: updatedUser.firstName,
+        lastName: updatedUser.lastName,
+        subscription: updatedUser.subscription
+      }
+    });
+
+  } catch (error) {
+    console.error('Email verification error:', error);
+    res.status(500).json({ 
+      error: 'Failed to verify email' 
+    });
+  }
+};
+
+// RESEND VERIFICATION EMAIL
+exports.resendVerification = async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({ 
+        error: 'Email is required' 
+      });
+    }
+
+    // Find user
+    const user = await prisma.user.findUnique({
+      where: { email: email.toLowerCase() }
+    });
+
+    if (!user) {
+      return res.status(404).json({ 
+        error: 'No account found with this email' 
+      });
+    }
+
+    if (user.emailVerified) {
+      return res.status(400).json({ 
+        error: 'Email is already verified' 
+      });
+    }
+
+    // Generate new verification token
+    const verificationToken = crypto.randomBytes(32).toString('hex');
+    const verificationExpires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+
+    // Update user with new token
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        verificationToken,
+        verificationExpires
+      }
+    });
+
+    // Send verification email
+    await emailService.sendVerificationEmail(
+      user.email,
+      user.firstName,
+      verificationToken
+    );
+
+    res.json({
+      message: 'Verification email sent! Please check your inbox.'
+    });
+
+  } catch (error) {
+    console.error('Resend verification error:', error);
+    res.status(500).json({ 
+      error: 'Failed to resend verification email' 
+    });
+  }
+};
+
+// LOGIN - Authenticate user
 exports.login = async (req, res) => {
   try {
     const { email, password } = req.body;
 
-    // Validation
+    // Validate input
     if (!email || !password) {
       return res.status(400).json({ 
         error: 'Email and password are required' 
@@ -121,41 +241,40 @@ exports.login = async (req, res) => {
       });
     }
 
-    // Check password
-    const isPasswordValid = await bcrypt.compare(password, user.password);
+    // Check if email is verified
+    if (!user.emailVerified) {
+      return res.status(403).json({ 
+        error: 'Please verify your email before logging in',
+        requiresVerification: true,
+        email: user.email
+      });
+    }
 
-    if (!isPasswordValid) {
+    // Verify password
+    const validPassword = await bcrypt.compare(password, user.password);
+    if (!validPassword) {
       return res.status(401).json({ 
         error: 'Invalid email or password' 
       });
     }
 
-    // Check if trial has expired
-    if (user.subscription.isTrialActive && 
-        new Date() > new Date(user.subscription.trialEndDate)) {
-      
-      await prisma.subscription.update({
-        where: { userId: user.id },
-        data: { 
-          isTrialActive: false,
-          status: 'expired'
-        }
-      });
+    // Generate JWT token
+    const token = jwt.sign(
+      { userId: user.id },
+      process.env.JWT_SECRET,
+      { expiresIn: '7d' }
+    );
 
-      user.subscription.isTrialActive = false;
-      user.subscription.status = 'expired';
-    }
-
-    // Generate token
-    const token = generateToken(user.id);
-
-    // Remove password from response
-    const { password: _, ...userWithoutPassword } = user;
-
+    // Return user data and token
     res.json({
-      message: 'Login successful',
       token,
-      user: userWithoutPassword
+      user: {
+        id: user.id,
+        email: user.email,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        subscription: user.subscription
+      }
     });
 
   } catch (error) {
@@ -166,8 +285,8 @@ exports.login = async (req, res) => {
   }
 };
 
-// GET ME - Get current user profile
-exports.getMe = async (req, res) => {
+// GET CURRENT USER - Get authenticated user's data
+exports.getCurrentUser = async (req, res) => {
   try {
     const user = await prisma.user.findUnique({
       where: { id: req.userId },
@@ -177,8 +296,9 @@ exports.getMe = async (req, res) => {
         email: true,
         firstName: true,
         lastName: true,
-        createdAt: true,
-        subscription: true
+        emailVerified: true,
+        subscription: true,
+        createdAt: true
       }
     });
 
@@ -188,21 +308,12 @@ exports.getMe = async (req, res) => {
       });
     }
 
-    // Calculate days remaining in trial
-    if (user.subscription.isTrialActive) {
-      const now = new Date();
-      const trialEnd = new Date(user.subscription.trialEndDate);
-      const daysRemaining = Math.ceil((trialEnd - now) / (1000 * 60 * 60 * 24));
-      
-      user.subscription.trialDaysRemaining = Math.max(0, daysRemaining);
-    }
-
     res.json({ user });
 
   } catch (error) {
-    console.error('Get me error:', error);
+    console.error('Get current user error:', error);
     res.status(500).json({ 
-      error: 'Failed to fetch user data' 
+      error: 'Failed to get user data' 
     });
   }
 };

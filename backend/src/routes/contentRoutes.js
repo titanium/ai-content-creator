@@ -6,12 +6,13 @@ const router = express.Router();
 const contentController = require('../controllers/contentController');
 const { authenticate } = require('../middleware/authMiddleware');
 const { checkAccess } = require('../middleware/trialMiddleware');
+const { requireEmailVerification } = require('../middleware/emailVerificationMiddleware');
 
 // All content routes require authentication
 router.use(authenticate);
 
 // Generate new content (requires active access)
-router.post('/generate', checkAccess, contentController.generateContent);
+router.post('/generate', authenticate, requireEmailVerification, contentController.generateContent);
 
 // Get content history
 router.get('/history', contentController.getContentHistory);

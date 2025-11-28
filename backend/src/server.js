@@ -9,7 +9,8 @@ const cors = require('cors');
 const authRoutes = require('./routes/authRoutes');
 const contentRoutes = require('./routes/contentRoutes');
 const subscriptionRoutes = require('./routes/subscriptionRoutes');
-const adminRoutes = require('./routes/adminRoutes'); // NEW - Admin routes
+const adminRoutes = require('./routes/adminRoutes'); 
+const emailCronRoutes = require('./routes/emailCronRoutes');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -38,6 +39,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/content', contentRoutes);
 app.use('/api/subscription', subscriptionRoutes);
 app.use('/api/admin', adminRoutes); // NEW - Admin routes
+app.use('/api/cron/email', emailCronRoutes);
 
 // 404 handler
 app.use((req, res) => {

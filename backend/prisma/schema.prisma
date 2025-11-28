@@ -1,5 +1,5 @@
 // This is your Prisma schema file
-// It defines your database structure
+// Updated with email verification fields
 
 generator client {
   provider = "prisma-client-js"
@@ -12,20 +12,25 @@ datasource db {
 
 // User model - stores user account information
 model User {
-  id            String        @id @default(uuid())
-  email         String        @unique
-  password      String
-  firstName     String
-  lastName      String
-  isAdmin       Boolean       @default(false)
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
+  id                    String        @id @default(uuid())
+  email                 String        @unique
+  password              String
+  firstName             String
+  lastName              String
+  isAdmin               Boolean       @default(false)
+  emailVerified         Boolean       @default(false)
+  verificationToken     String?       @unique
+  verificationExpires   DateTime?
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
   
   // Relationships
   subscription  Subscription?
   content       Content[]
   
   @@index([isAdmin])
+  @@index([emailVerified])
+  @@index([verificationToken])
   @@map("users")
 }
 
@@ -39,6 +44,8 @@ model Subscription {
   trialStartDate      DateTime  @default(now())
   trialEndDate        DateTime
   isTrialActive       Boolean   @default(true)
+  trialReminderSent   Boolean   @default(false)
+  trialExpiredEmailSent Boolean @default(false)
   
   // Stripe information
   stripeCustomerId    String?   @unique
