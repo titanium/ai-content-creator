@@ -460,7 +460,7 @@ export default function ContentCreatorApp() {
   const Navigation = () => (
     <nav className="bg-white shadow-sm border-b">
       <div className="max-w-6xl mx-auto px-4 py-4 flex justify-between items-center">
-        <h1 className="text-2xl font-bold text-indigo-600">Content Creator AI</h1>
+        <h1 className="text-2xl font-bold text-indigo-600">Post Maker AI</h1>
         <div className="flex items-center gap-4">
           {currentView !== 'login' && currentView !== 'signup' && (
             <>
