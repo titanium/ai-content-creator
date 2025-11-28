@@ -470,6 +470,16 @@ export default function ContentCreatorApp() {
     return typeMap[type] || type;
   };
 
+  const resetForm = () => {
+    setContentType('');
+    setTopic('');
+    setKeywords('');
+    setGeneratedContent('');
+    setError('');
+    setCopied(false);
+    setCurrentView('dashboard');
+  };
+
   // Navigation Component
   const Navigation = () => (
     <nav className="bg-white shadow-sm border-b">
@@ -479,7 +489,7 @@ export default function ContentCreatorApp() {
           {currentView !== 'login' && currentView !== 'signup' && (
             <>
               <button
-                onClick={() => setCurrentView('dashboard')}
+                onClick={resetForm}
                 className={`text-sm font-medium ${
                   currentView === 'dashboard' ? 'text-indigo-600' : 'text-gray-600 hover:text-gray-900'
                 }`}
@@ -632,7 +642,7 @@ export default function ContentCreatorApp() {
               <h3 className="text-lg font-semibold text-gray-900 mb-2">No content yet</h3>
               <p className="text-gray-600 mb-4">Start creating content to see it here</p>
               <button
-                onClick={() => setCurrentView('dashboard')}
+                onClick={resetForm}
                 className="bg-indigo-600 text-white px-6 py-2 rounded-lg hover:bg-indigo-700"
               >
                 Create Content
@@ -1339,13 +1349,7 @@ export default function ContentCreatorApp() {
             <h3 className="text-lg font-semibold text-gray-900 mb-3">What's next?</h3>
             <div className="space-y-3">
               <button
-                onClick={() => {
-                  setGeneratedContent('');
-                  setTopic('');
-                  setKeywords('');
-                  setContentType('');
-                  setCurrentView('dashboard');
-                }}
+                onClick={resetForm}
                 className="w-full bg-white text-indigo-700 py-3 rounded-lg font-semibold hover:bg-indigo-100 transition border border-indigo-200"
               >
                 Create Another Post
