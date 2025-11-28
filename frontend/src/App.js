@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { AlertCircle, Copy, CheckCircle, Loader2, Sparkles, CreditCard, History, Trash2, Eye, Calendar, FileText, Settings, CreditCard as CreditCardIcon, Calendar as CalendarIcon } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { AlertCircle, Copy, CheckCircle, Loader2, Sparkles, CreditCard, History, Trash2, Eye, Calendar, FileText, Settings, CreditCard as CreditCardIcon, Calendar as CalendarIcon, ChevronDown, LogOut } from 'lucide-react';
 import AdminDashboard from './AdminDashboard';
 
 const API_URL = 'https://ai-content-creator-backend-production.up.railway.app/api';
@@ -12,7 +12,9 @@ export default function ContentCreatorApp() {
   const [copied, setCopied] = useState(false);
   const [subscriptionStatus, setSubscriptionStatus] = useState(null);
   const [subscriptionDetails, setSubscriptionDetails] = useState(null);
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
+  const dropdownRef = useRef(null);
   
   const [loginData, setLoginData] = useState({ email: '', password: '' });
   const [signupData, setSignupData] = useState({
@@ -64,6 +66,18 @@ export default function ContentCreatorApp() {
     }
   }, []);
 
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setIsDropdownOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
   // Fetch content history when filter changes
   useEffect(() => {
     if (currentView === 'history' && token) {
@@ -84,6 +98,17 @@ export default function ContentCreatorApp() {
       }
     } catch (err) {
       console.error('Failed to fetch subscription status:', err);
+    }
+  };
+
+  const checkAdminStatus = async (authToken) => {
+    try {
+      const response = await fetch(`${API_URL}/admin/stats`, {
+        headers: { 'Authorization': `Bearer ${authToken}` }
+      });
+      return response.ok;
+    } catch {
+      return false;
     }
   };
 
@@ -445,22 +470,11 @@ export default function ContentCreatorApp() {
     return typeMap[type] || type;
   };
 
-  const checkAdminStatus = async (authToken) => {
-    try {
-      const response = await fetch(`${API_URL}/admin/stats`, {
-        headers: { 'Authorization': `Bearer ${authToken}` }
-      });
-      return response.ok;
-    } catch {
-      return false;
-    }
-  };
-
   // Navigation Component
   const Navigation = () => (
     <nav className="bg-white shadow-sm border-b">
       <div className="max-w-6xl mx-auto px-4 py-4 flex justify-between items-center">
-        <h1 className="text-2xl font-bold text-indigo-600">Post Maker AI</h1>
+        <h1 className="text-2xl font-bold text-indigo-600">Content Creator AI</h1>
         <div className="flex items-center gap-4">
           {currentView !== 'login' && currentView !== 'signup' && (
             <>
@@ -471,35 +485,6 @@ export default function ContentCreatorApp() {
                 }`}
               >
                 Create
-              </button>
-              <button
-                onClick={() => {
-                  setCurrentView('history');
-                  fetchContentHistory();
-                  fetchContentStats();
-                }}
-                className={`flex items-center gap-1 text-sm font-medium ${
-                  currentView === 'history' || currentView === 'content-detail' 
-                    ? 'text-indigo-600' 
-                    : 'text-gray-600 hover:text-gray-900'
-                }`}
-              >
-                <History size={18} />
-                History
-              </button>
-              <button
-                onClick={() => {
-                  setCurrentView('settings');
-                  fetchSubscriptionStatus(token);
-                }}
-                className={`flex items-center gap-1 text-sm font-medium ${
-                  currentView === 'settings' 
-                    ? 'text-indigo-600' 
-                    : 'text-gray-600 hover:text-gray-900'
-                }`}
-              >
-                <Settings size={18} />
-                Settings
               </button>
             </>
           )}
@@ -523,22 +508,67 @@ export default function ContentCreatorApp() {
             </span>
           )}
           {user && (
-            <>
-              <span className="text-sm font-medium text-gray-900">
-                {user?.firstName} {user?.lastName}
-              </span>
+            <div className="relative" ref={dropdownRef}>
               <button
-                onClick={handleLogout}
-                className="text-sm text-gray-600 hover:text-gray-900"
+                onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+                className="flex items-center gap-2 text-sm font-medium text-gray-900 hover:text-indigo-600 transition"
               >
-                Logout
+                <span>{user?.firstName} {user?.lastName}</span>
+                <ChevronDown 
+                  size={16} 
+                  className={`transition-transform ${isDropdownOpen ? 'rotate-180' : ''}`}
+                />
               </button>
-            </>
+              
+              {isDropdownOpen && (
+                <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50">
+                  <button
+                    onClick={() => {
+                      setCurrentView('history');
+                      fetchContentHistory();
+                      fetchContentStats();
+                      setIsDropdownOpen(false);
+                    }}
+                    className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition"
+                  >
+                    <History size={16} />
+                    History
+                  </button>
+                  <button
+                    onClick={() => {
+                      setCurrentView('settings');
+                      fetchSubscriptionStatus(token);
+                      setIsDropdownOpen(false);
+                    }}
+                    className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition"
+                  >
+                    <Settings size={16} />
+                    Settings
+                  </button>
+                  <div className="border-t border-gray-100 my-1"></div>
+                  <button
+                    onClick={() => {
+                      handleLogout();
+                      setIsDropdownOpen(false);
+                    }}
+                    className="w-full flex items-center gap-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition"
+                  >
+                    <LogOut size={16} />
+                    Logout
+                  </button>
+                </div>
+              )}
+            </div>
           )}
         </div>
       </div>
     </nav>
   );
+
+  // Admin Dashboard View
+  if (currentView === 'admin') {
+    return <AdminDashboard token={token} onLogout={handleLogout} />;
+  }
 
   // Content History View
   if (currentView === 'history') {
@@ -657,11 +687,6 @@ export default function ContentCreatorApp() {
         </div>
       </div>
     );
-  }
-
-  // Admin Dashboard View
-  if (currentView === 'admin') {
-    return <AdminDashboard token={token} onLogout={handleLogout} />;
   }
 
   // Settings/Subscription Management View
