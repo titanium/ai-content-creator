@@ -14,21 +14,16 @@ const adminRoutes = require('./routes/adminRoutes');
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// CORS Configuration - IMPORTANT!
-const allowedOrigins = [
-  'https://app.postmaker.org',
-  'https://ai-content-creator-puce.vercel.app',
-  'http://localhost:3000',
-  'http://localhost:5173',
-];
+// CORS Configuration
+const allowedOrigins = process.env.ALLOWED_ORIGINS 
+  ? process.env.ALLOWED_ORIGINS.split(',')
+  : ['http://localhost:3000'];
 
 app.use(cors({
   origin: function (origin, callback) {
-    // Allow requests with no origin (like mobile apps, Postman, etc.)
     if (!origin) return callback(null, true);
-    
     if (allowedOrigins.indexOf(origin) === -1) {
-      const msg = 'The CORS policy for this site does not allow access from the specified origin.';
+      const msg = 'CORS policy does not allow access from the specified origin.';
       return callback(new Error(msg), false);
     }
     return callback(null, true);
@@ -38,7 +33,6 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization', 'x-cron-secret']
 }));
 
-// Handle preflight requests
 app.options('*', cors());
 
 // Stripe webhook needs raw body, so we add this before express.json()
