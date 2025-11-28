@@ -9,6 +9,7 @@ const cors = require('cors');
 const authRoutes = require('./routes/authRoutes');
 const contentRoutes = require('./routes/contentRoutes');
 const subscriptionRoutes = require('./routes/subscriptionRoutes');
+const adminRoutes = require('./routes/adminRoutes'); // NEW - Admin routes
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -36,6 +37,7 @@ app.get('/health', (req, res) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/content', contentRoutes);
 app.use('/api/subscription', subscriptionRoutes);
+app.use('/api/admin', adminRoutes); // NEW - Admin routes
 
 // 404 handler
 app.use((req, res) => {

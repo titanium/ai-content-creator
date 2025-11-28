@@ -17,6 +17,7 @@ model User {
   password      String
   firstName     String
   lastName      String
+  isAdmin       Boolean       @default(false)
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
   
@@ -24,6 +25,7 @@ model User {
   subscription  Subscription?
   content       Content[]
   
+  @@index([isAdmin])
   @@map("users")
 }
 
@@ -45,7 +47,7 @@ model Subscription {
   stripeCurrentPeriodEnd DateTime?
   
   // Subscription status
-  status              String    @default("trial") // trial, active, canceled, expired
+  status              String    @default("trial") // trial, active, canceled, expired, past_due
   
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
