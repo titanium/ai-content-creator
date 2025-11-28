@@ -16,6 +16,7 @@ const PORT = process.env.PORT || 5000;
 
 // CORS Configuration - IMPORTANT!
 const allowedOrigins = [
+  'https://app.postmaker.org',
   'https://ai-content-creator-puce.vercel.app',
   'http://localhost:3000',
   'http://localhost:5173',
