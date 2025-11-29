@@ -1,8 +1,7 @@
- "description": "AI Content Creator Backend",
 {
   "name": "backend",
   "version": "1.0.0",
-  "description": "",
+  "description": "AI Content Creator Backend",
   "main": "src/server.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
