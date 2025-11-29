@@ -5,7 +5,7 @@ const { Resend } = require('resend');
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
-const FROM_EMAIL = process.env.FROM_EMAIL || 'noreply@postmaker.org';
+const FROM_EMAIL = process.env.FROM_EMAIL || 'noreply@notifications.postmaker.org';
 const APP_URL = process.env.APP_URL || 'https://ai-content-creator-puce.vercel.app';
 
 /**
