@@ -12,7 +12,7 @@ const subscriptionRoutes = require('./routes/subscriptionRoutes');
 const adminRoutes = require('./routes/adminRoutes');
 
 const app = express();
-const PORT = process.env.PORT || 5000; 
+const PORT = process.env.PORT || 5000;
 
 // CORS Configuration
 const allowedOrigins = [
@@ -35,8 +35,6 @@ app.use(cors({
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'x-cron-secret']
 }));
-
-app.options('/*', cors());
 
 // Stripe webhook needs raw body, so we add this before express.json()
 app.use('/api/subscription/webhook', express.raw({ type: 'application/json' }));
