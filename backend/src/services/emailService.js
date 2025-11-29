@@ -12,13 +12,13 @@ const APP_URL = process.env.APP_URL || 'https://ai-content-creator-puce.vercel.a
  * Send email verification
  */
 exports.sendVerificationEmail = async (email, firstName, verificationToken) => {
-  const verificationUrl = `${APP_URL}/verify-email?token=${verificationToken}`;
+  const verificationUrl = `https://app.postmaker.org/verify-email?token=${verificationToken}`;
   
   try {
     const { data, error } = await resend.emails.send({
       from: FROM_EMAIL,
       to: email,
-      subject: 'Verify your email - Content Creator AI',
+      subject: 'Post Maker AI - Verify your email',
       html: `
         <!DOCTYPE html>
         <html>
@@ -77,11 +77,11 @@ exports.sendVerificationEmail = async (email, firstName, verificationToken) => {
         </head>
         <body>
           <div class="container">
-            <div class="logo">Content Creator AI</div>
+            <div class="logo">Post Maker AI</div>
             
             <h1>Welcome, ${firstName}! 👋</h1>
             
-            <p>Thanks for signing up for Content Creator AI! We're excited to have you on board.</p>
+            <p>Thanks for signing up for Post Maker AI! We're excited to have you on board.</p>
             
             <p>Before you can start creating amazing AI-powered content, please verify your email address by clicking the button below:</p>
             
@@ -91,8 +91,8 @@ exports.sendVerificationEmail = async (email, firstName, verificationToken) => {
             <p style="word-break: break-all; color: #4F46E5; font-size: 14px;">${verificationUrl}</p>
             
             <div class="warning">
-              <strong>⏰ This link expires in 24 hours</strong><br>
-              If you didn't create an account with Content Creator AI, you can safely ignore this email.
+              <strong>⏰ This link expires in 24 hours</strong><br><br>
+              If you didn't create an account with Post Maker AI, you can safely ignore this email.
             </div>
             
             <p><strong>What's next?</strong></p>
@@ -105,7 +105,7 @@ exports.sendVerificationEmail = async (email, firstName, verificationToken) => {
             
             <div class="footer">
               <p>Need help? Reply to this email or visit our <a href="${APP_URL}/contact">support page</a>.</p>
-              <p>Content Creator AI<br>
+              <p>Post Maker AI<br>
               Building the future of content creation</p>
             </div>
           </div>
@@ -135,7 +135,7 @@ exports.sendTrialExpiringSoonEmail = async (email, firstName, daysRemaining) => 
     const { data, error } = await resend.emails.send({
       from: FROM_EMAIL,
       to: email,
-      subject: `Your trial expires in ${daysRemaining} days - Content Creator AI`,
+      subject: `Post Maker AI - Your trial expires in ${daysRemaining} days`,
       html: `
         <!DOCTYPE html>
         <html>
@@ -240,16 +240,16 @@ exports.sendTrialExpiringSoonEmail = async (email, firstName, daysRemaining) => 
         </head>
         <body>
           <div class="container">
-            <div class="logo">Content Creator AI</div>
+            <div class="logo">Post Maker AI</div>
             
             <h1>Hi ${firstName},</h1>
             
             <div class="alert">
-              <strong>⏰ Your free trial expires in ${daysRemaining} days</strong><br>
+              <strong>⏰ Your free trial expires in ${daysRemaining} days</strong><br><br>
               Don't lose access to unlimited AI-powered content creation!
             </div>
             
-            <p>We hope you've been enjoying Content Creator AI! Your 15-day free trial will end soon, and we wanted to give you a heads up.</p>
+            <p>We hope you've been enjoying Post Maker AI! Your 15-day free trial will end soon, and we wanted to give you a heads up.</p>
             
             <div class="price">
               <div class="price-amount">$29</div>
@@ -305,7 +305,7 @@ exports.sendTrialExpiredEmail = async (email, firstName) => {
     const { data, error } = await resend.emails.send({
       from: FROM_EMAIL,
       to: email,
-      subject: 'Your trial has ended - Upgrade to continue creating',
+      subject: 'Your Post Maker AI trial has ended - Upgrade to continue creating',
       html: `
         <!DOCTYPE html>
         <html>
@@ -402,16 +402,16 @@ exports.sendTrialExpiredEmail = async (email, firstName) => {
         </head>
         <body>
           <div class="container">
-            <div class="logo">Content Creator AI</div>
+            <div class="logo">Post Maker AI</div>
             
             <h1>Hi ${firstName},</h1>
             
             <div class="alert">
-              <strong>⏰ Your free trial has ended</strong><br>
+              <strong>⏰ Your free trial has ended</strong><br><br
               Upgrade now to continue creating unlimited AI-powered content.
             </div>
             
-            <p>We hope you enjoyed your 15-day trial of Content Creator AI! Your trial has now ended, but you can upgrade to Pro and continue creating amazing content.</p>
+            <p>We hope you enjoyed your 15-day trial of Post Maker AI! Your trial has now ended, but you can upgrade to Pro and continue creating amazing content.</p>
             
             <div class="price">
               <div class="price-amount">$29</div>
