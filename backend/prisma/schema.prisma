@@ -12,17 +12,17 @@ datasource db {
 
 // User model - stores user account information
 model User {
-  id                    String        @id @default(uuid())
-  email                 String        @unique
-  password              String
-  firstName             String
-  lastName              String
-  isAdmin               Boolean       @default(false)
-  emailVerified         Boolean       @default(false)
-  verificationToken     String?       @unique
-  verificationExpires   DateTime?
-  createdAt             DateTime      @default(now())
-  updatedAt             DateTime      @updatedAt
+  id                        String        @id @default(uuid())
+  email                     String        @unique
+  password                  String
+  firstName                 String
+  lastName                  String
+  isAdmin                   Boolean       @default(false)
+  emailVerified             Boolean       @default(false)
+  emailVerificationToken    String?       @unique
+  emailVerificationExpiry   DateTime?
+  createdAt                 DateTime      @default(now())
+  updatedAt                 DateTime      @updatedAt
   
   // Relationships
   subscription  Subscription?
@@ -30,7 +30,7 @@ model User {
   
   @@index([isAdmin])
   @@index([emailVerified])
-  @@index([verificationToken])
+  @@index([emailVerificationToken])
   @@map("users")
 }
 
