@@ -36,7 +36,7 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization', 'x-cron-secret']
 }));
 
-app.options('*', cors());
+app.options('/*', cors());
 
 // Stripe webhook needs raw body, so we add this before express.json()
 app.use('/api/subscription/webhook', express.raw({ type: 'application/json' }));
