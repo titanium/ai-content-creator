@@ -21,6 +21,11 @@ export default function ContentCreatorApp() {
     firstName: '', lastName: '', email: '', password: '', confirmPassword: ''
   });
   
+  // Email verification state
+  const [showEmailVerificationBanner, setShowEmailVerificationBanner] = useState(false);
+  const [verificationMessage, setVerificationMessage] = useState('');
+
+
   const [contentType, setContentType] = useState('');
   const [topic, setTopic] = useState('');
   const [keywords, setKeywords] = useState('');
@@ -32,6 +37,26 @@ export default function ContentCreatorApp() {
   const [selectedContent, setSelectedContent] = useState(null);
   const [historyFilter, setHistoryFilter] = useState('all');
   const [historyStats, setHistoryStats] = useState(null);
+
+  // Checks email verification on load
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const verificationToken = urlParams.get('token');
+    
+    if (verificationToken && window.location.pathname === '/verify-email') {
+      verifyEmail(verificationToken);
+    }
+  }, []);
+
+  // Shows banner if not verified
+  useEffect(() => {
+    if (user && !user.emailVerified && currentView === 'dashboard') {
+      setShowEmailVerificationBanner(true);
+    } else {
+      setShowEmailVerificationBanner(false);
+    }
+  }, [user, currentView]);
+
 
   useEffect(() => {
     const savedToken = localStorage.getItem('token');
@@ -52,6 +77,97 @@ export default function ContentCreatorApp() {
       
       fetchSubscriptionStatus(savedToken);
     }
+
+    const handleSignup = async () => {
+      setError('');
+      
+      if (signupData.password !== signupData.confirmPassword) {
+        setError('Passwords do not match');
+        return;
+      }
+      
+      if (signupData.password.length < 8) {
+        setError('Password must be at least 8 characters');
+        return;
+      }
+
+      if (!signupData.email || !signupData.firstName || !signupData.lastName) {
+        setError('All fields are required');
+        return;
+      }
+
+      setIsLoading(true);
+      
+      try {
+        const response = await fetch(`${API_URL}/auth/signup`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: signupData.email,
+            password: signupData.password,
+            firstName: signupData.firstName,
+            lastName: signupData.lastName
+          })
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          setError(data.error || 'Signup failed');
+          setIsLoading(false);
+          return;
+        }
+
+        localStorage.setItem('token', data.token);
+        localStorage.setItem('user', JSON.stringify(data.user));
+        setToken(data.token);
+        setUser(data.user);
+        
+        // Show email verification screen instead of going directly to dashboard
+        setCurrentView('verify-email-prompt');
+        fetchSubscriptionStatus(data.token);
+        
+      } catch (err) {
+        setError('Failed to connect to server. Make sure backend is running.');
+        console.error(err);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+  const EmailVerificationBanner = () => (
+    <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-6">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center">
+          <AlertCircle className="text-yellow-400 mr-3" size={24} />
+          <div>
+            <p className="text-yellow-800 font-medium">Please verify your email address</p>
+            <p className="text-yellow-700 text-sm">
+              Check your inbox for a verification link. Didn't receive it?
+            </p>
+          </div>
+        </div>
+        <button
+          onClick={resendVerificationEmail}
+          disabled={isLoading}
+          className="ml-4 px-4 py-2 bg-yellow-400 text-yellow-900 rounded-lg hover:bg-yellow-500 transition-colors disabled:opacity-50 text-sm font-medium"
+        >
+          {isLoading ? 'Sending...' : 'Resend Email'}
+        </button>
+      </div>
+    </div>
+  );  
+
+  // Add banner to dashboard view
+  {showEmailVerificationBanner && <EmailVerificationBanner />}
+
+  // Success message display at top of dashboard
+  {verificationMessage && (
+    <div className="mb-4 p-4 bg-green-50 border border-green-200 rounded-lg flex items-center">
+      <CheckCircle className="text-green-600 mr-3" size={20} />
+      <p className="text-green-800">{verificationMessage}</p>
+    </div>
+  )}
 
     // Check for successful Stripe checkout
     const urlParams = new URLSearchParams(window.location.search);
@@ -100,6 +216,68 @@ export default function ContentCreatorApp() {
       console.error('Failed to fetch subscription status:', err);
     }
   };
+
+  // Verification function
+  const verifyEmail = async (token) => {
+  setIsLoading(true);
+  try {
+    const response = await fetch(`${API_URL}/auth/verify-email?token=${token}`);
+    const data = await response.json();
+
+    if (response.ok) {
+      // Update user object to mark email as verified
+      const updatedUser = { ...user, emailVerified: true };
+      setUser(updatedUser);
+      localStorage.setItem('user', JSON.stringify(updatedUser));
+      
+      setVerificationMessage('Email verified successfully! ');
+      setCurrentView('dashboard');
+      
+      // Clear URL parameters
+      window.history.replaceState({}, document.title, window.location.pathname);
+      
+      // Clear success message after 5 seconds
+      setTimeout(() => setVerificationMessage(''), 5000);
+    } else {
+      setError(data.error || 'Email verification failed');
+      setCurrentView('login');
+    }
+  } catch (err) {
+    setError('Failed to verify email');
+    console.error(err);
+  } finally {
+    setIsLoading(false);
+  }
+};
+
+const resendVerificationEmail = async () => {
+  if (!user || !user.email) return;
+  
+  setIsLoading(true);
+  setError('');
+  
+  try {
+    const response = await fetch(`${API_URL}/auth/resend-verification`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: user.email })
+    });
+
+    const data = await response.json();
+
+    if (response.ok) {
+      setVerificationMessage('Verification email sent! Please check your inbox.');
+      setTimeout(() => setVerificationMessage(''), 5000);
+    } else {
+      setError(data.error || 'Failed to resend verification email');
+    }
+  } catch (err) {
+    setError('Failed to resend verification email');
+    console.error(err);
+  } finally {
+    setIsLoading(false);
+  }
+};
 
   const checkAdminStatus = async (authToken) => {
     try {
@@ -579,6 +757,64 @@ export default function ContentCreatorApp() {
   if (currentView === 'admin') {
     return <AdminDashboard token={token} onLogout={handleLogout} />;
   }
+
+  // Email verification prompt view
+  if (currentView === 'verify-email-prompt') {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-purple-50 to-blue-50 flex items-center justify-center p-4">
+        <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-8 text-center">
+          <div className="mb-6">
+            <div className="w-16 h-16 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <svg className="w-8 h-8 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+              </svg>
+            </div>
+            <h2 className="text-2xl font-bold text-gray-900 mb-2">Check Your Email</h2>
+            <p className="text-gray-600 mb-4">
+              We've sent a verification link to <span className="font-semibold">{user?.email}</span>
+            </p>
+            <p className="text-sm text-gray-500 mb-6">
+              Click the link in the email to verify your account and start creating content.
+            </p>
+          </div>
+
+          {verificationMessage && (
+            <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg">
+              <p className="text-green-800 text-sm">{verificationMessage}</p>
+            </div>
+          )}
+
+          {error && (
+            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+              <p className="text-red-800 text-sm">{error}</p>
+            </div>
+          )}
+
+          <div className="space-y-3">
+            <button
+              onClick={resendVerificationEmail}
+              disabled={isLoading}
+              className="w-full px-4 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50 font-medium"
+            >
+              {isLoading ? 'Sending...' : 'Resend Verification Email'}
+            </button>
+            
+            <button
+              onClick={() => setCurrentView('dashboard')}
+              className="w-full px-4 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors font-medium"
+            >
+              Continue to Dashboard
+            </button>
+          </div>
+
+          <p className="mt-6 text-xs text-gray-500">
+            Didn't receive the email? Check your spam folder or contact support.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
 
   // Content History View
   if (currentView === 'history') {
